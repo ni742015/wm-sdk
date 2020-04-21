@@ -1,6 +1,6 @@
 {
   "name": "wm-sdk",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "scripts": {
     "start": "node ./example.js",
     "compile": "babel src --out-dir ./"

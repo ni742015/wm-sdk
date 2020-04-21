@@ -110,7 +110,6 @@ API.prototype.request = function(opts = {}) {
 API.prototype.getAccessToken = async function(ifForce) {
   try {
 		var token = await this.getToken()
-		console.log('token 111111', res)
 
     var { client_id, client_secret, grant_type, payload, redirect_uri, tokenUrl } = this
     var attr = {
@@ -119,12 +118,11 @@ API.prototype.getAccessToken = async function(ifForce) {
       refresh_token: 'refresh_token'
     }[grant_type]
     if (!token || ifForce) {
-      if(tokenUrl) {
-				var res = await axios.get(tokenUrl).then(res => res.data)
-				var {access_token, expires_in} = res.data
-				console.log('token', res)
+      var access_token, expires_in, res
 
-        token = this.saveToken(AccessToken(access_token, expires_in))
+      if(tokenUrl) {
+				res = await axios.get(tokenUrl, {params: { ifForce}}).then(res => res.data)
+        console.log('customer url token', res)
       } else {
         var url = '/fuwu/b/oauth2/token'
 
@@ -153,14 +151,13 @@ API.prototype.getAccessToken = async function(ifForce) {
             }
           })
           .then(res => res.data)
-          console.log('res', res);
-          
-        var {access_token, expires_in: expires} = res
-        // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
-        var expireTime = new Date().getTime() + (expires - 10) * 1000
-        token = this.saveToken(AccessToken(access_token, expireTime, res))
+          console.log('get new token:', res);
+  
       }
-
+      // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
+      access_token = res.access_token
+      expires_in = res.expires_in - 10 * 1000
+      token = this.saveToken(AccessToken(access_token, expires_in, res))
     }
     return token
   } catch (error) {
@@ -204,14 +201,13 @@ API.prototype.invoke = async function(apiName, opt = {}, retryTimes = 2) {
   // console.log('url, data', url, opt.data)
   return this.request(extend({ url, responseType, method }, opt)).then(res => {
     // var data = res.data
-    var { gw_err_resp, data, response, error_response } = res.data
-    var errorRes = gw_err_resp || error_response
-	// console.log(res.data);
+    // console.log(res.data.code)
+    var { code: {errcode, errmsg}, data } = res.data
+    console.log('errcode, errmsg', errcode, errmsg)
 
     // 无效token重试
-    if (errorRes) {
-      var { code, msg, err_code = code, err_msg = msg } = errorRes
-      if ([80001001000109, 80001001000113].indexOf(err_code) >= 0 && --retryTimes >= 0 ) {
+    if (errcode != 0) {
+      if ([80001001000109, 80001001000113].indexOf(errcode) >= 0 && --retryTimes >= 0 ) {
         console.log('retryTimes', retryTimes);
         Array.prototype.splice.call(args, 2, 1, retryTimes)
         return this.refreshToken().then(() => this.invoke(...args))
@@ -219,15 +215,15 @@ API.prototype.invoke = async function(apiName, opt = {}, retryTimes = 2) {
         const error = new Error(
           `wmsdk invoke error: ${url}, ${JSON.stringify(
             opt
-          )} - ${err_code} - ${err_msg}`
+          )} - ${errcode} - ${errmsg}`
         )
-        error.code = err_code
-        error.msg = err_msg
+        error.code = errcode
+        error.msg = errmsg
         throw error
       }
     }
 
-    return data || response || gw_err_resp
+    return data
   })
 }
 

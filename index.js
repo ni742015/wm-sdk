@@ -112,7 +112,6 @@ API.prototype.request = function () {
 API.prototype.getAccessToken = async function (ifForce) {
   try {
     var token = await this.getToken();
-    console.log('token 111111', res);
 
     var client_id = this.client_id,
         client_secret = this.client_secret,
@@ -127,17 +126,13 @@ API.prototype.getAccessToken = async function (ifForce) {
       refresh_token: 'refresh_token'
     }[grant_type];
     if (!token || ifForce) {
+      var access_token, expires_in, res;
+
       if (tokenUrl) {
-        var res = await axios.get(tokenUrl).then(function (res) {
+        res = await axios.get(tokenUrl, { params: { ifForce: ifForce } }).then(function (res) {
           return res.data;
         });
-        var _res$data = res.data,
-            access_token = _res$data.access_token,
-            expires_in = _res$data.expires_in;
-
-        console.log('token', res);
-
-        token = this.saveToken(AccessToken(access_token, expires_in));
+        console.log('customer url token', res);
       } else {
         var _console$log, _params;
 
@@ -163,15 +158,12 @@ API.prototype.getAccessToken = async function (ifForce) {
         }).then(function (res) {
           return res.data;
         });
-        console.log('res', res);
-
-        var access_token = res.access_token,
-            expires = res.expires_in;
-        // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
-
-        var expireTime = new Date().getTime() + (expires - 10) * 1000;
-        token = this.saveToken(AccessToken(access_token, expireTime, res));
+        console.log('get new token:', res);
       }
+      // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
+      access_token = res.access_token;
+      expires_in = res.expires_in - 10 * 1000;
+      token = this.saveToken(AccessToken(access_token, expires_in, res));
     }
     return token;
   } catch (error) {
@@ -228,39 +220,32 @@ API.prototype.invoke = async function (apiName) {
   // console.log('url, data', url, opt.data)
   return this.request(extend({ url: url, responseType: responseType, method: method }, opt)).then(function (res) {
     // var data = res.data
-    var _res$data2 = res.data,
-        gw_err_resp = _res$data2.gw_err_resp,
-        data = _res$data2.data,
-        response = _res$data2.response,
-        error_response = _res$data2.error_response;
+    // console.log(res.data.code)
+    var _res$data = res.data,
+        _res$data$code = _res$data.code,
+        errcode = _res$data$code.errcode,
+        errmsg = _res$data$code.errmsg,
+        data = _res$data.data;
 
-    var errorRes = gw_err_resp || error_response;
-    // console.log(res.data);
+    console.log('errcode, errmsg', errcode, errmsg);
 
     // 无效token重试
-    if (errorRes) {
-      var code = errorRes.code,
-          msg = errorRes.msg,
-          _errorRes$err_code = errorRes.err_code,
-          err_code = _errorRes$err_code === undefined ? code : _errorRes$err_code,
-          _errorRes$err_msg = errorRes.err_msg,
-          err_msg = _errorRes$err_msg === undefined ? msg : _errorRes$err_msg;
-
-      if ([80001001000109, 80001001000113].indexOf(err_code) >= 0 && --retryTimes >= 0) {
+    if (errcode != 0) {
+      if ([80001001000109, 80001001000113].indexOf(errcode) >= 0 && --retryTimes >= 0) {
         console.log('retryTimes', retryTimes);
         Array.prototype.splice.call(args, 2, 1, retryTimes);
         return _this2.refreshToken().then(function () {
           return _this2.invoke.apply(_this2, _toConsumableArray(args));
         });
       } else {
-        var error = new Error('wmsdk invoke error: ' + url + ', ' + JSON.stringify(opt) + ' - ' + err_code + ' - ' + err_msg);
-        error.code = err_code;
-        error.msg = err_msg;
+        var error = new Error('wmsdk invoke error: ' + url + ', ' + JSON.stringify(opt) + ' - ' + errcode + ' - ' + errmsg);
+        error.code = errcode;
+        error.msg = errmsg;
         throw error;
       }
     }
 
-    return data || response || gw_err_resp;
+    return data;
   });
 };
 
