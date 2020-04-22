@@ -118,7 +118,7 @@ API.prototype.getAccessToken = async function(ifForce) {
       refresh_token: 'refresh_token'
     }[grant_type]
     if (!token || ifForce) {
-      var access_token, expires_in, res
+      var res
 
       if(tokenUrl) {
 				res = await axios.get(tokenUrl, {params: { ifForce}}).then(res => res.data)
@@ -155,8 +155,8 @@ API.prototype.getAccessToken = async function(ifForce) {
   
       }
       // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
-      access_token = res.access_token
-      expires_in = res.expires_in - 10 * 1000
+      var access_token = res.access_token
+      var expires_in = Date.now() + res.expires_in * 1000
       token = this.saveToken(AccessToken(access_token, expires_in, res))
     }
     return token
