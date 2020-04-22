@@ -23,6 +23,7 @@ var AccessToken = function AccessToken(accessToken, expireTime, others) {
  * 检查AccessToken是否有效，检查规则为当前时间和过期时间进行对比
  */
 var validToken = function validToken(token) {
+  console.log('validToken', token.accessToken, token.expireTime);
   return !!token && !!token.accessToken && new Date().getTime() < token.expireTime;
 };
 
@@ -162,7 +163,7 @@ API.prototype.getAccessToken = async function (ifForce) {
       }
       // 过期时间，因网络延迟等，将实际过期时间提前10秒，以防止临界点
       var access_token = res.access_token;
-      var expires_in = Date.now() + res.expires_in * 1000;
+      var expires_in = Date.now() + (res.expires_in - 600) * 1000;
       token = this.saveToken(AccessToken(access_token, expires_in, res));
     }
     return token;
@@ -227,11 +228,11 @@ API.prototype.invoke = async function (apiName) {
         errmsg = _res$data$code.errmsg,
         data = _res$data.data;
 
-    console.log('errcode, errmsg', errcode, errmsg);
+    console.log('errcode, errmsg', res.data.code);
 
     // 无效token重试
     if (errcode != 0) {
-      if ([80001001000109, 80001001000113].indexOf(errcode) >= 0 && --retryTimes >= 0) {
+      if (errcode == 80001001000119 && --retryTimes >= 0) {
         console.log('retryTimes', retryTimes);
         Array.prototype.splice.call(args, 2, 1, retryTimes);
         return _this2.refreshToken().then(function () {
